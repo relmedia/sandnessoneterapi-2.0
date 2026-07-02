@@ -1,0 +1,56 @@
+/* Loaded after react-day-picker/style.css */
+.booking-calendar .rdp-root {
+  --rdp-accent-color: #6b8c76;
+  --rdp-accent-background-color: #ebf0ec;
+  --rdp-today-color: #3d3530;
+  --rdp-selected-border: 2px solid #6b8c76;
+  --rdp-day-height: 40px;
+  --rdp-day-width: 40px;
+  --rdp-day_button-height: 38px;
+  --rdp-day_button-width: 38px;
+  width: 100%;
+  max-width: fit-content;
+  margin-inline: auto;
+}
+
+.booking-calendar .rdp-month_grid {
+  margin-inline: auto;
+}
+
+.booking-calendar .rdp-chevron {
+  fill: #3d3530;
+}
+
+.booking-calendar .rdp-button_next,
+.booking-calendar .rdp-button_previous {
+  border-radius: 9999px;
+  transition: background-color 0.15s ease;
+}
+
+.booking-calendar .rdp-button_next:hover:not(:disabled):not([aria-disabled="true"]),
+.booking-calendar .rdp-button_previous:hover:not(:disabled):not([aria-disabled="true"]) {
+  background-color: #ebf0ec;
+}
+
+.booking-calendar .rdp-button_next:hover:not(:disabled):not([aria-disabled="true"]) .rdp-chevron,
+.booking-calendar .rdp-button_previous:hover:not(:disabled):not([aria-disabled="true"]) .rdp-chevron {
+  fill: #4e6b58;
+}
+
+.booking-calendar .rdp-today:not(.rdp-selected):not(.rdp-outside) .rdp-day_button {
+  background-color: #ebf0ec;
+  border: 1px solid rgb(107 140 118 / 0.35);
+  color: #4e6b58;
+  font-weight: 500;
+}
+
+.booking-calendar .rdp-selected .rdp-day_button {
+  background-color: #6b8c76;
+  border-color: #6b8c76;
+  color: #faf7f2;
+}
+
+.booking-calendar .rdp-day_button:focus-visible {
+  outline: 2px solid rgb(107 140 118 / 0.5);
+  outline-offset: 2px;
+}
