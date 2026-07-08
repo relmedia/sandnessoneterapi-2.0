@@ -10,6 +10,7 @@ import {
   FloatingLabelSelect,
   FloatingLabelTextarea,
 } from "@/components/floating-label-field";
+import { TurnstileWidget } from "@/components/turnstile-widget";
 import {
   formatDateIso,
   getDefaultAvailabilityRange,
@@ -20,6 +21,8 @@ import "react-day-picker/style.css";
 import "./booking-calendar.css";
 
 type FormState = "idle" | "submitting" | "error";
+
+const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim());
 
 const floatingFieldClassName =
   "w-full rounded-xl border border-stone/10 bg-cream/40 px-4 pb-2.5 pt-6 font-sans text-base font-normal text-stone transition-colors focus:border-sage focus:outline-none focus:ring-2 focus:ring-sage/15";
@@ -94,6 +97,7 @@ export function BookingForm({ services }: { readonly services: readonly BookingS
   const [phone, setPhone] = useState("");
   const [service, setService] = useState<string>(services[0]?.value ?? "");
   const [message, setMessage] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [availableDates, setAvailableDates] = useState<Set<string>>(new Set());
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
 
@@ -173,6 +177,12 @@ export function BookingForm({ services }: { readonly services: readonly BookingS
       return;
     }
 
+    if (turnstileEnabled && !turnstileToken) {
+      setErrorMessage("Bekreft at du ikke er en robot.");
+      setFormState("error");
+      return;
+    }
+
     setFormState("submitting");
     setErrorMessage(null);
 
@@ -193,16 +203,19 @@ export function BookingForm({ services }: { readonly services: readonly BookingS
           time: selectedTime,
           message,
           website,
+          ...(turnstileToken ? { turnstileToken } : {}),
         }),
       });
 
       const data = (await response.json()) as { message?: string; error?: string; cancelToken?: string };
 
       if (!response.ok) {
+        setTurnstileToken(null);
         throw new Error(data.error ?? "Noe gikk galt. Prøv igjen.");
       }
 
       if (!data.cancelToken) {
+        setTurnstileToken(null);
         throw new Error("Kunne ikke fullføre bestillingen.");
       }
 
@@ -376,6 +389,19 @@ export function BookingForm({ services }: { readonly services: readonly BookingS
 
             <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
 
+            {turnstileEnabled && (
+              <div className="mt-6">
+                <TurnstileWidget
+                  onToken={setTurnstileToken}
+                  onExpire={() => setTurnstileToken(null)}
+                  onError={() => {
+                    setTurnstileToken(null);
+                    setErrorMessage("Sikkerhetskontrollen kunne ikke lastes. Prøv igjen.");
+                  }}
+                />
+              </div>
+            )}
+
             {errorMessage && (
               <p className="mt-4 font-sans text-sm text-red-700" role="alert">
                 {errorMessage}
@@ -384,7 +410,7 @@ export function BookingForm({ services }: { readonly services: readonly BookingS
 
             <button
               type="submit"
-              disabled={formState === "submitting" || !selectedDate || !selectedTime}
+              disabled={formState === "submitting" || !selectedDate || !selectedTime || (turnstileEnabled && !turnstileToken)}
               className="mt-8 w-full cursor-pointer rounded-full bg-stone px-8 py-4 font-sans text-sm font-normal tracking-wide text-cream transition-colors hover:bg-sage-dark disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               {formState === "submitting" ? "Sender …" : "Send timeforespørsel"}

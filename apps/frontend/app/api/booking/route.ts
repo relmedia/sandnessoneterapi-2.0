@@ -12,6 +12,7 @@ import {
   getBookedTimes,
 } from "@/lib/booking-store";
 import { getServices } from "@/lib/content";
+import { getRequestIp, isTurnstileConfigured, verifyTurnstileToken } from "@/lib/turnstile";
 
 export async function GET(request: NextRequest) {
   const date = request.nextUrl.searchParams.get("date");
@@ -55,6 +56,18 @@ export async function POST(request: NextRequest) {
   );
   if (!validation.ok) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+
+  if (isTurnstileConfigured()) {
+    const token = validation.value.turnstileToken;
+    if (!token) {
+      return NextResponse.json({ error: "Bekreft at du ikke er en robot." }, { status: 400 });
+    }
+
+    const isHuman = await verifyTurnstileToken(token, getRequestIp(request));
+    if (!isHuman) {
+      return NextResponse.json({ error: "Sikkerhetskontrollen feilet. Prøv igjen." }, { status: 400 });
+    }
   }
 
   const supabase = createBookingClient();
