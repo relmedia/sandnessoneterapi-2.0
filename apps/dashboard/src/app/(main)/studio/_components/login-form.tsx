@@ -118,7 +118,11 @@ export function LoginForm() {
           )}
         />
       </FieldGroup>
-      <Button className="w-full" type="submit" disabled={isSubmitting}>
+      <Button
+        className="w-full bg-[#4e6b58] text-[#faf7f2] hover:bg-[#6b8c76]"
+        type="submit"
+        disabled={isSubmitting}
+      >
         {isSubmitting ? "Logger inn …" : "Logg inn"}
       </Button>
     </form>
