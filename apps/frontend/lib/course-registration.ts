@@ -87,6 +87,7 @@ export interface CourseRegistrationPayload {
   phone: string;
   sessionLabel?: string;
   message?: string;
+  turnstileToken?: string;
 }
 
 export function validateCourseRegistrationPayload(
@@ -110,6 +111,7 @@ export function validateCourseRegistrationPayload(
   const phone = typeof payload.phone === "string" ? payload.phone.trim() : "";
   const sessionLabel = typeof payload.sessionLabel === "string" ? payload.sessionLabel.trim() : "";
   const message = typeof payload.message === "string" ? payload.message.trim() : "";
+  const turnstileToken = typeof payload.turnstileToken === "string" ? payload.turnstileToken.trim() : "";
 
   if (!courseSlug) return { ok: false, error: "Ugyldig kurs." };
 
@@ -147,6 +149,7 @@ export function validateCourseRegistrationPayload(
       phone,
       sessionLabel: sessionLabel || undefined,
       message: message || undefined,
+      turnstileToken: turnstileToken || undefined,
     },
   };
 }

@@ -4,6 +4,7 @@ import { isEmailConfigured, sendCourseRegistrationEmails } from "@/lib/booking-e
 import { createBookingClient } from "@/lib/booking-store";
 import { getCourseSessionLabels, validateCourseRegistrationPayload } from "@/lib/course-registration";
 import { getCourseBySlug } from "@/lib/content";
+import { getRequestIp, isTurnstileConfigured, verifyTurnstileToken } from "@/lib/turnstile";
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -17,6 +18,18 @@ export async function POST(request: NextRequest) {
   const validation = validateCourseRegistrationPayload(body);
   if (!validation.ok) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+
+  if (isTurnstileConfigured()) {
+    const token = validation.value.turnstileToken;
+    if (!token) {
+      return NextResponse.json({ error: "Bekreft at du ikke er en robot." }, { status: 400 });
+    }
+
+    const isHuman = await verifyTurnstileToken(token, getRequestIp(request));
+    if (!isHuman) {
+      return NextResponse.json({ error: "Sikkerhetskontrollen feilet. Prøv igjen." }, { status: 400 });
+    }
   }
 
   const { courseSlug, firstName, lastName, email, phone, sessionLabel, message } = validation.value;

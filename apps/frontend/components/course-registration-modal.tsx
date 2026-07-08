@@ -14,7 +14,10 @@ import {
 import { Check, MapPin, X } from "lucide-react";
 
 import { FloatingLabelField, FloatingLabelTextarea } from "@/components/floating-label-field";
+import { TurnstileWidget } from "@/components/turnstile-widget";
 import type { CourseSessionAvailability } from "@/lib/course-registration";
+
+const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim());
 
 const floatingFieldClassName =
   "w-full rounded-xl border border-stone/10 bg-cream/40 px-4 pb-2.5 pt-6 font-sans text-base font-normal text-stone transition-colors focus:border-sage focus:outline-none focus:ring-2 focus:ring-sage/15";
@@ -55,12 +58,18 @@ function CourseRegistrationForm({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (sessions.length > 0 && !sessionLabel) {
       setErrorMessage("Velg en kursdato.");
+      return;
+    }
+
+    if (turnstileEnabled && !turnstileToken) {
+      setErrorMessage("Bekreft at du ikke er en robot.");
       return;
     }
 
@@ -82,6 +91,7 @@ function CourseRegistrationForm({
           sessionLabel,
           message,
           website: typeof honeypot === "string" ? honeypot : "",
+          ...(turnstileToken ? { turnstileToken } : {}),
         }),
       });
 
@@ -93,6 +103,7 @@ function CourseRegistrationForm({
 
       setSuccessMessage(data.message ?? "Påmeldingen er sendt.");
     } catch (error) {
+      setTurnstileToken(null);
       setErrorMessage(error instanceof Error ? error.message : "Kunne ikke sende påmeldingen.");
     } finally {
       setSubmitting(false);
@@ -231,6 +242,19 @@ function CourseRegistrationForm({
         </label>
       </div>
 
+      {turnstileEnabled && (
+        <div className="mt-6">
+          <TurnstileWidget
+            onToken={setTurnstileToken}
+            onExpire={() => setTurnstileToken(null)}
+            onError={() => {
+              setTurnstileToken(null);
+              setErrorMessage("Sikkerhetskontrollen kunne ikke lastes. Prøv igjen.");
+            }}
+          />
+        </div>
+      )}
+
       {errorMessage && (
         <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 font-sans text-sm font-normal text-red-700">
           {errorMessage}
@@ -239,7 +263,7 @@ function CourseRegistrationForm({
 
       <button
         type="submit"
-        disabled={submitting}
+        disabled={submitting || (turnstileEnabled && !turnstileToken)}
         className="mt-6 w-full cursor-pointer rounded-full bg-stone px-8 py-4 font-sans text-sm font-normal tracking-wide text-cream transition-colors hover:bg-sage-dark disabled:cursor-not-allowed disabled:opacity-60"
       >
         {submitting ? "Sender …" : "Send påmelding"}
