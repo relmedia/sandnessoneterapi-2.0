@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { CourseRegistrationTrigger } from "@/components/course-registration-modal";
+import { CourseRegistrationProvider, CourseRegistrationTrigger } from "@/components/course-registration-modal";
 import { createBookingClient } from "@/lib/booking-store";
 import { buildCourseSessionAvailability, getCourseSessionLabels } from "@/lib/course-registration";
 import { getCourseBySlug, getSettings } from "@/lib/content";
@@ -89,6 +89,7 @@ export default async function KursDetailPage({ params }: { params: Promise<Param
 
   return (
     <div className="py-16 md:py-24">
+      <CourseRegistrationProvider {...registrationProps}>
       <article className="container-wide section-padding mx-auto max-w-3xl">
         <nav
           aria-label="Brødsmulesti"
@@ -142,7 +143,7 @@ export default async function KursDetailPage({ params }: { params: Promise<Param
         )}
 
         <div className="mb-10">
-          <CourseRegistrationTrigger {...registrationProps} />
+          <CourseRegistrationTrigger />
         </div>
 
         {course.image_url && (
@@ -169,10 +170,7 @@ export default async function KursDetailPage({ params }: { params: Promise<Param
               >
                 Ring {telDisplay}
               </a>
-              <CourseRegistrationTrigger
-                {...registrationProps}
-                className="inline-block cursor-pointer rounded-full border border-stone/30 px-6 py-3 font-sans text-sm font-normal tracking-wide text-stone transition-colors hover:border-sage hover:text-sage-dark"
-              />
+              <CourseRegistrationTrigger className="inline-block cursor-pointer rounded-full border border-stone/30 px-6 py-3 font-sans text-sm font-normal tracking-wide text-stone transition-colors hover:border-sage hover:text-sage-dark" />
             </div>
           </div>
         )}
@@ -186,6 +184,7 @@ export default async function KursDetailPage({ params }: { params: Promise<Param
           </Link>
         </div>
       </article>
+      </CourseRegistrationProvider>
     </div>
   );
 }

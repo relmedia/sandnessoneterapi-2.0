@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useId, useState, type FormEvent } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
 import { Check, MapPin, X } from "lucide-react";
 
@@ -354,26 +363,39 @@ export function CourseRegistrationModal({
   );
 }
 
-type CourseRegistrationTriggerProps = Omit<CourseRegistrationModalProps, "open" | "onClose"> & {
-  readonly className?: string;
+const CourseRegistrationContext = createContext<(() => void) | null>(null);
+
+type CourseRegistrationProviderProps = Omit<CourseRegistrationModalProps, "open" | "onClose"> & {
+  readonly children: ReactNode;
 };
 
-export function CourseRegistrationTrigger({ className, ...modalProps }: CourseRegistrationTriggerProps) {
+// Owns the single modal instance; every trigger inside opens the same modal.
+export function CourseRegistrationProvider({ children, ...modalProps }: CourseRegistrationProviderProps) {
   const [open, setOpen] = useState(false);
+  const openModal = useCallback(() => setOpen(true), []);
+  const closeModal = useCallback(() => setOpen(false), []);
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={
-          className ??
-          "cursor-pointer rounded-full bg-stone px-6 py-3 font-sans text-sm font-normal tracking-wide text-cream transition-colors hover:bg-sage-dark"
-        }
-      >
-        Meld deg på
-      </button>
-      <CourseRegistrationModal {...modalProps} open={open} onClose={() => setOpen(false)} />
-    </>
+    <CourseRegistrationContext.Provider value={openModal}>
+      {children}
+      <CourseRegistrationModal {...modalProps} open={open} onClose={closeModal} />
+    </CourseRegistrationContext.Provider>
+  );
+}
+
+export function CourseRegistrationTrigger({ className }: { readonly className?: string }) {
+  const openModal = useContext(CourseRegistrationContext);
+
+  return (
+    <button
+      type="button"
+      onClick={openModal ?? undefined}
+      className={
+        className ??
+        "cursor-pointer rounded-full bg-stone px-6 py-3 font-sans text-sm font-normal tracking-wide text-cream transition-colors hover:bg-sage-dark"
+      }
+    >
+      Meld deg på
+    </button>
   );
 }
