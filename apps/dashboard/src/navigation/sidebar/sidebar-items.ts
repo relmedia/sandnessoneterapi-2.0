@@ -114,6 +114,12 @@ export const sidebarItems: NavGroup[] = [
           },
         ],
       },
+    ],
+  },
+  {
+    id: 4,
+    label: "Timeplan",
+    items: [
       {
         title: "Ledige dager",
         url: "/dashboard/ledige-dager",
@@ -132,7 +138,7 @@ export const sidebarItems: NavGroup[] = [
     ],
   },
   {
-    id: 4,
+    id: 5,
     label: "System",
     items: [
       {
