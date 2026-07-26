@@ -2,49 +2,35 @@
 
 import { useState, useTransition } from "react";
 
-import { CalendarIcon, CalendarPlus, Pencil } from "lucide-react";
+import { CalendarIcon, CalendarPlus } from "lucide-react";
 import { nb } from "react-day-picker/locale";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  AVAILABILITY_SCOPES,
+  AVAILABILITY_SCOPE_LABELS,
+  expandAvailabilityDates,
+  formatAvailabilityDate as formatDate,
+  formatShortDate,
+  parseAvailabilityDate as parseDate,
+  startOfToday,
+  toIsoDate,
+  todayInOslo,
+  type AvailabilityScope,
+} from "@/lib/availability";
 import { cn } from "@/lib/utils";
-import { deleteAvailabilityDay, saveAvailabilityDay } from "@/server/booking-actions";
+import { saveAvailabilityDay } from "@/server/booking-actions";
 import { BOOKING_TIME_SLOTS, type AvailabilityDay } from "@/types/booking";
 
-import { DeleteContentButton } from "../../_components/delete-content-button";
-
-function parseDate(value: string): Date | undefined {
-  if (!value) return undefined;
-  const date = new Date(`${value}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? undefined : date;
-}
-
-function toIsoDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatDate(value: string): string {
-  const date = parseDate(value);
-  if (!date) return value;
-  const label = date.toLocaleDateString("nb-NO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-function startOfToday(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
+import { AvailabilityDayTable } from "./availability-day-table";
 
 function DatePicker({
   value,
@@ -102,8 +88,15 @@ function DatePicker({
 export function AvailabilityManager({ days }: { readonly days: AvailabilityDay[] }) {
   const [date, setDate] = useState("");
   const [isClosed, setIsClosed] = useState(false);
+  const [scope, setScope] = useState<AvailabilityScope>("day");
+  const [skipWeekends, setSkipWeekends] = useState(true);
   const [slots, setSlots] = useState<string[]>([...BOOKING_TIME_SLOTS]);
   const [isPending, startTransition] = useTransition();
+
+  // Same expansion the server action performs, so the form can preview it.
+  const periodDates = date ? expandAvailabilityDates(date, scope, { skipWeekends }) : [];
+  const targetDates = periodDates.filter((value) => value >= todayInOslo());
+  const skippedPast = periodDates.length - targetDates.length;
 
   const toggleSlot = (slot: string, checked: boolean) => {
     setSlots((prev) => (checked ? [...prev, slot].sort() : prev.filter((value) => value !== slot)));
@@ -112,6 +105,7 @@ export function AvailabilityManager({ days }: { readonly days: AvailabilityDay[]
   const editDay = (day: AvailabilityDay) => {
     setDate(day.date);
     setIsClosed(day.is_closed);
+    setScope("day");
     setSlots(day.is_closed ? [...BOOKING_TIME_SLOTS] : day.slots);
   };
 
@@ -120,7 +114,9 @@ export function AvailabilityManager({ days }: { readonly days: AvailabilityDay[]
 
     const formData = new FormData();
     formData.set("date", date);
+    formData.set("scope", scope);
     if (isClosed) formData.set("is_closed", "on");
+    if (skipWeekends) formData.set("skip_weekends", "on");
     for (const slot of slots) formData.append("slots", slot);
 
     startTransition(async () => {
@@ -129,9 +125,10 @@ export function AvailabilityManager({ days }: { readonly days: AvailabilityDay[]
         toast.error(result.error);
         return;
       }
-      toast.success("Dagen er lagret.");
+      toast.success(result.saved === 1 ? "Dagen er lagret." : `${result.saved} dager er lagret.`);
       setDate("");
       setIsClosed(false);
+      setScope("day");
       setSlots([...BOOKING_TIME_SLOTS]);
     });
   };
@@ -156,8 +153,35 @@ export function AvailabilityManager({ days }: { readonly days: AvailabilityDay[]
                   plannedDates={days.map((day) => parseDate(day.date)).filter((d): d is Date => Boolean(d))}
                 />
                 <p className="text-muted-foreground text-xs">
-                  Finnes datoen fra før, overskrives den med valgene under.
+                  Datoer som finnes fra før, overskrives med valgene under.
                 </p>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="availability-scope">Gjelder for</Label>
+                <Select value={scope} onValueChange={(value) => setScope(value as AvailabilityScope)}>
+                  <SelectTrigger id="availability-scope" className="h-9 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AVAILABILITY_SCOPES.map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {AVAILABILITY_SCOPE_LABELS[value]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {scope === "day" ? (
+                  <p className="text-muted-foreground text-xs">Lagrer bare den valgte datoen.</p>
+                ) : (
+                  <label className="text-muted-foreground flex cursor-pointer items-center gap-2 text-xs">
+                    <Checkbox
+                      checked={skipWeekends}
+                      onCheckedChange={(checked) => setSkipWeekends(checked === true)}
+                    />
+                    Hopp over helger
+                  </label>
+                )}
               </div>
 
               <div className="flex flex-col gap-2">
@@ -170,6 +194,21 @@ export function AvailabilityManager({ days }: { readonly days: AvailabilityDay[]
                 </div>
               </div>
             </div>
+
+            {date && scope !== "day" && (
+              <p className="text-muted-foreground bg-muted/50 rounded-md px-3 py-2 text-xs">
+                {targetDates.length === 0 ? (
+                  "Ingen dager i perioden. Slå av «Hopp over helger», eller velg en annen dato."
+                ) : (
+                  <>
+                    Lagres for {targetDates.length} {targetDates.length === 1 ? "dag" : "dager"}:{" "}
+                    {formatShortDate(targetDates[0])} – {formatShortDate(targetDates[targetDates.length - 1])}.
+                    {skippedPast > 0 &&
+                      ` ${skippedPast} ${skippedPast === 1 ? "dag" : "dager"} som har passert, hoppes over.`}
+                  </>
+                )}
+              </p>
+            )}
 
             {!isClosed && (
               <div className="flex flex-col gap-2">
@@ -189,56 +228,19 @@ export function AvailabilityManager({ days }: { readonly days: AvailabilityDay[]
             )}
 
             <div>
-              <Button type="submit" disabled={isPending || !date}>
-                {isPending ? "Lagrer …" : "Lagre dag"}
+              <Button type="submit" disabled={isPending || !date || targetDates.length === 0}>
+                {isPending ? "Lagrer …" : targetDates.length > 1 ? `Lagre ${targetDates.length} dager` : "Lagre dag"}
               </Button>
             </div>
           </form>
         </CardContent>
       </Card>
 
-      <Card className="py-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Dato</TableHead>
-              <TableHead className="hidden md:table-cell">Klokkeslett</TableHead>
-              <TableHead className="w-24 text-center">Status</TableHead>
-              <TableHead className="w-28 text-right">Handlinger</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {days.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={4} className="text-muted-foreground py-10 text-center">
-                  Ingen ledige dager er lagt inn ennå. Legg til en dag over for å åpne for booking.
-                </TableCell>
-              </TableRow>
-            )}
-            {days.map((day) => (
-              <TableRow key={day.id}>
-                <TableCell className="font-medium">{formatDate(day.date)}</TableCell>
-                <TableCell className="text-muted-foreground hidden md:table-cell">
-                  {day.is_closed ? "—" : day.slots.join(", ")}
-                </TableCell>
-                <TableCell className="text-center">
-                  <Badge variant={day.is_closed ? "outline" : "default"}>
-                    {day.is_closed ? "Stengt" : `${day.slots.length} tider`}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
-                    <Button variant="ghost" size="icon" aria-label="Rediger" onClick={() => editDay(day)}>
-                      <Pencil className="size-4" />
-                    </Button>
-                    <DeleteContentButton id={day.id} label={formatDate(day.date)} action={deleteAvailabilityDay} />
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
+      <AvailabilityDayTable
+        days={days}
+        onEdit={editDay}
+        emptyMessage="Ingen kommende dager er lagt inn. Legg til en dag over for å åpne for booking."
+      />
     </div>
   );
 }

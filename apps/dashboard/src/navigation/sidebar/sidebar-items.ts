@@ -88,16 +88,46 @@ export const sidebarItems: NavGroup[] = [
         title: "Timebestillinger",
         url: "/dashboard/bestillinger",
         icon: CalendarCheck,
+        subItems: [
+          {
+            title: "Kommende",
+            url: "/dashboard/bestillinger",
+          },
+          {
+            title: "Tidligere",
+            url: "/dashboard/bestillinger/historikk",
+          },
+        ],
       },
       {
         title: "Kurspåmeldinger",
         url: "/dashboard/kurspameldinger",
         icon: ClipboardList,
+        subItems: [
+          {
+            title: "Kommende",
+            url: "/dashboard/kurspameldinger",
+          },
+          {
+            title: "Tidligere",
+            url: "/dashboard/kurspameldinger/historikk",
+          },
+        ],
       },
       {
         title: "Ledige dager",
         url: "/dashboard/ledige-dager",
         icon: CalendarDays,
+        subItems: [
+          {
+            title: "Kommende",
+            url: "/dashboard/ledige-dager",
+          },
+          {
+            title: "Tidligere",
+            url: "/dashboard/ledige-dager/historikk",
+          },
+        ],
       },
     ],
   },

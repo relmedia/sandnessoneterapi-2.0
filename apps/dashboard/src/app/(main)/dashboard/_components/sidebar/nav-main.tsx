@@ -25,6 +25,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
 interface NavMainProps {
@@ -32,10 +33,20 @@ interface NavMainProps {
   readonly badges?: Record<string, number>;
 }
 
+const formatBadgeCount = (count: number) => (count > 99 ? "99+" : count);
+
 const PendingBadge = ({ count }: { count: number }) => (
   <SidebarMenuBadge className="min-w-7 rounded-full bg-primary px-2.5 text-primary-foreground peer-hover/menu-button:text-primary-foreground peer-data-active/menu-button:text-primary-foreground">
-    {count > 99 ? "99+" : count}
+    {formatBadgeCount(count)}
   </SidebarMenuBadge>
+);
+
+// Items with a submenu already use the right edge for the chevron, so their
+// badge is laid out inline instead of absolutely positioned.
+const InlinePendingBadge = ({ count }: { count: number }) => (
+  <span className="ml-auto flex h-5 min-w-7 items-center justify-center rounded-full bg-primary px-2.5 text-xs font-medium text-primary-foreground tabular-nums select-none group-data-[collapsible=icon]:hidden">
+    {formatBadgeCount(count)}
+  </span>
 );
 
 const IsComingSoon = () => (
@@ -66,7 +77,13 @@ const NavItemExpanded = ({
               {item.icon && <item.icon />}
               <span>{item.title}</span>
               {item.comingSoon && <IsComingSoon />}
-              <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+              {badge ? <InlinePendingBadge count={badge} /> : null}
+              <ChevronRight
+                className={cn(
+                  "transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90",
+                  !badge && "ml-auto",
+                )}
+              />
             </SidebarMenuButton>
           ) : (
             <SidebarMenuButton

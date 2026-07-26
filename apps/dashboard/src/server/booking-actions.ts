@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { expandAvailabilityDates, parseAvailabilityScope, todayInOslo } from "@/lib/availability";
 import { sendBookingConfirmedEmailFromDashboard } from "@/lib/booking-email";
 import { createClient } from "@/lib/supabase/server";
 import type { BookingStatus } from "@/types/booking";
@@ -65,7 +66,7 @@ export async function setBookingStatus(id: string, status: BookingStatus): Promi
       }
     }
 
-    revalidatePath("/dashboard/bestillinger");
+    revalidateBookings();
     return { ok: true };
   }
 
@@ -79,7 +80,7 @@ export async function setBookingStatus(id: string, status: BookingStatus): Promi
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/dashboard/bestillinger");
+  revalidateBookings();
   return { ok: true };
 }
 
@@ -87,8 +88,13 @@ export async function deleteBooking(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("booking_requests").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/bestillinger");
+  revalidateBookings();
   return { ok: true };
+}
+
+function revalidateBookings() {
+  revalidatePath("/dashboard/bestillinger");
+  revalidatePath("/dashboard/bestillinger/historikk");
 }
 
 // ---------------- Course registrations (Kurspåmeldinger) ----------------
@@ -109,7 +115,7 @@ export async function setCourseRegistrationStatus(id: string, status: BookingSta
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/dashboard/kurspameldinger");
+  revalidateRegistrations();
   return { ok: true };
 }
 
@@ -117,15 +123,22 @@ export async function deleteCourseRegistration(id: string): Promise<ActionResult
   const supabase = await createClient();
   const { error } = await supabase.from("course_registrations").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/kurspameldinger");
+  revalidateRegistrations();
   return { ok: true };
+}
+
+function revalidateRegistrations() {
+  revalidatePath("/dashboard/kurspameldinger");
+  revalidatePath("/dashboard/kurspameldinger/historikk");
 }
 
 // ---------------- Availability (Ledige dager) ----------------
 
-export async function saveAvailabilityDay(formData: FormData): Promise<ActionResult> {
+export async function saveAvailabilityDay(formData: FormData): Promise<ActionResult & { saved?: number }> {
   const date = ((formData.get("date") as string | null) ?? "").trim();
   const isClosed = formData.get("is_closed") === "on";
+  const scope = parseAvailabilityScope(formData.get("scope"));
+  const skipWeekends = formData.get("skip_weekends") === "on";
   const slots = formData
     .getAll("slots")
     .map((value) => String(value))
@@ -140,27 +153,53 @@ export async function saveAvailabilityDay(formData: FormData): Promise<ActionRes
     return { ok: false, error: "Legg til minst ett klokkeslett, eller merk dagen som stengt." };
   }
 
+  const dates = expandAvailabilityDates(date, scope, { skipWeekends, notBefore: todayInOslo() });
+
+  if (dates.length === 0) {
+    return { ok: false, error: "Ingen dager å lagre i den valgte perioden." };
+  }
+
+  const updatedAt = new Date().toISOString();
   const supabase = await createClient();
   const { error } = await supabase.from("availability_days").upsert(
-    {
-      date,
+    dates.map((value) => ({
+      date: value,
       is_closed: isClosed,
       slots: isClosed ? [] : slots,
-      updated_at: new Date().toISOString(),
-    },
+      updated_at: updatedAt,
+    })),
     { onConflict: "date" },
   );
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/dashboard/ledige-dager");
-  return { ok: true };
+  revalidateAvailability();
+  return { ok: true, saved: dates.length };
 }
 
 export async function deleteAvailabilityDay(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("availability_days").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/ledige-dager");
+  revalidateAvailability();
   return { ok: true };
+}
+
+export async function deletePastAvailabilityDays(): Promise<ActionResult & { deleted?: number }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("availability_days")
+    .delete()
+    .lt("date", todayInOslo())
+    .select("id");
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidateAvailability();
+  return { ok: true, deleted: data?.length ?? 0 };
+}
+
+function revalidateAvailability() {
+  revalidatePath("/dashboard/ledige-dager");
+  revalidatePath("/dashboard/ledige-dager/historikk");
 }
