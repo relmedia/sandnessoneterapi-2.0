@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { getPendingCounts } from "@/lib/bookings";
+import { getSidebarCounts, type SidebarCount } from "@/lib/bookings";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -41,15 +41,15 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
 
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
-  const [variant, collapsible, pendingCounts] = await Promise.all([
+  const [variant, collapsible, counts] = await Promise.all([
     getPreference("sidebar_variant", SIDEBAR_VARIANT_VALUES, "inset"),
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
-    getPendingCounts(),
+    getSidebarCounts(),
   ]);
 
-  const sidebarBadges: Record<string, number> = {
-    "/dashboard/bestillinger": pendingCounts.bookings,
-    "/dashboard/kurspameldinger": pendingCounts.courseRegistrations,
+  const sidebarBadges: Record<string, SidebarCount> = {
+    "/dashboard/bestillinger": counts.bookings,
+    "/dashboard/kurspameldinger": counts.courseRegistrations,
   };
 
   return (

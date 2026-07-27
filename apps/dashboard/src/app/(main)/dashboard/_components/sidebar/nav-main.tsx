@@ -25,27 +25,47 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import type { SidebarCount } from "@/lib/bookings";
 import { cn } from "@/lib/utils";
 import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 
 interface NavMainProps {
   readonly items: readonly NavGroup[];
-  readonly badges?: Record<string, number>;
+  readonly badges?: Record<string, SidebarCount>;
 }
 
 const formatBadgeCount = (count: number) => (count > 99 ? "99+" : count);
 
-const PendingBadge = ({ count }: { count: number }) => (
-  <SidebarMenuBadge className="min-w-7 rounded-full bg-primary px-2.5 text-primary-foreground peer-hover/menu-button:text-primary-foreground peer-data-active/menu-button:text-primary-foreground">
-    {formatBadgeCount(count)}
+// Highlighted while something still needs a reply, muted when the number is
+// just how many upcoming entries there are.
+const badgeTitle = ({ total, pending }: SidebarCount) =>
+  pending > 0 ? `${pending} venter på svar av ${total} kommende` : `${total} kommende`;
+
+const CountBadge = ({ count }: { count: SidebarCount }) => (
+  <SidebarMenuBadge
+    title={badgeTitle(count)}
+    className={cn(
+      "min-w-7 rounded-full px-2.5",
+      count.pending > 0
+        ? "bg-primary text-primary-foreground peer-hover/menu-button:text-primary-foreground peer-data-active/menu-button:text-primary-foreground"
+        : "bg-muted text-muted-foreground peer-hover/menu-button:text-muted-foreground peer-data-active/menu-button:text-muted-foreground",
+    )}
+  >
+    {formatBadgeCount(count.total)}
   </SidebarMenuBadge>
 );
 
 // Items with a submenu already use the right edge for the chevron, so their
 // badge is laid out inline instead of absolutely positioned.
-const InlinePendingBadge = ({ count }: { count: number }) => (
-  <span className="ml-auto flex h-5 min-w-7 items-center justify-center rounded-full bg-primary px-2.5 text-xs font-medium text-primary-foreground tabular-nums select-none group-data-[collapsible=icon]:hidden">
-    {formatBadgeCount(count)}
+const InlineCountBadge = ({ count }: { count: SidebarCount }) => (
+  <span
+    title={badgeTitle(count)}
+    className={cn(
+      "ml-auto flex h-5 min-w-7 items-center justify-center rounded-full px-2.5 text-xs font-medium tabular-nums select-none group-data-[collapsible=icon]:hidden",
+      count.pending > 0 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+    )}
+  >
+    {formatBadgeCount(count.total)}
   </span>
 );
 
@@ -62,8 +82,9 @@ const NavItemExpanded = ({
   item: NavMainItem;
   isActive: (url: string, subItems?: NavMainItem["subItems"]) => boolean;
   isSubmenuOpen: (subItems?: NavMainItem["subItems"]) => boolean;
-  badge?: number;
+  badge?: SidebarCount;
 }) => {
+  const showBadge = Boolean(badge && badge.total > 0);
   return (
     <Collapsible key={item.title} asChild defaultOpen={isSubmenuOpen(item.subItems)} className="group/collapsible">
       <SidebarMenuItem>
@@ -77,11 +98,11 @@ const NavItemExpanded = ({
               {item.icon && <item.icon />}
               <span>{item.title}</span>
               {item.comingSoon && <IsComingSoon />}
-              {badge ? <InlinePendingBadge count={badge} /> : null}
+              {badge && showBadge ? <InlineCountBadge count={badge} /> : null}
               <ChevronRight
                 className={cn(
                   "transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90",
-                  !badge && "ml-auto",
+                  !showBadge && "ml-auto",
                 )}
               />
             </SidebarMenuButton>
@@ -100,7 +121,7 @@ const NavItemExpanded = ({
             </SidebarMenuButton>
           )}
         </CollapsibleTrigger>
-        {!item.subItems && badge ? <PendingBadge count={badge} /> : null}
+        {!item.subItems && badge && showBadge ? <CountBadge count={badge} /> : null}
         {item.subItems && (
           <CollapsibleContent>
             <SidebarMenuSub>

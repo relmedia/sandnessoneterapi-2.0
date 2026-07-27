@@ -4,9 +4,16 @@ import { createClient } from "@/lib/supabase/server";
 import type { AvailabilityDay, BookingRequest, CourseRegistration } from "@/types/booking";
 import type { Course } from "@/types/content";
 
-export type PendingCounts = {
-  bookings: number;
-  courseRegistrations: number;
+// Sidebar counter: how many upcoming items there are, and how many of those
+// still need a reply.
+export type SidebarCount = {
+  total: number;
+  pending: number;
+};
+
+export type SidebarCounts = {
+  bookings: SidebarCount;
+  courseRegistrations: SidebarCount;
 };
 
 type CourseDateRow = Pick<Course, "id" | "slug" | "start_date" | "end_date" | "sessions">;
@@ -14,23 +21,37 @@ type CourseDateRow = Pick<Course, "id" | "slug" | "start_date" | "end_date" | "s
 // A registration plus the course date it is judged by (null when unknown).
 export type DatedCourseRegistration = CourseRegistration & { course_date: string | null };
 
-// Pending (unhandled) requests, shown as sidebar badges. Only upcoming ones
-// count: a request whose date has passed can no longer be acted on, and it
-// lives on the history page rather than the main list, so counting it would
-// send you to a page where it isn't shown.
-export async function getPendingCounts(): Promise<PendingCounts> {
+// Counts behind the sidebar badges. Cancelled entries are left out, and only
+// upcoming ones count: an entry whose date has passed lives on the history
+// page, so counting it would send you to a page where it isn't shown.
+export async function getSidebarCounts(): Promise<SidebarCounts> {
   const supabase = await createClient();
-  const [bookings, registrations] = await Promise.all([
+  const today = todayInOslo();
+  const [bookings, pendingBookings, registrations] = await Promise.all([
+    supabase
+      .from("booking_requests")
+      .select("id", { count: "exact", head: true })
+      .neq("status", "cancelled")
+      .gte("date", today),
     supabase
       .from("booking_requests")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending")
-      .gte("date", todayInOslo()),
+      .gte("date", today),
     getCourseRegistrations(),
   ]);
+
+  const activeRegistrations = registrations.filter((row) => row.status !== "cancelled");
+
   return {
-    bookings: bookings.count ?? 0,
-    courseRegistrations: registrations.filter((row) => row.status === "pending").length,
+    bookings: {
+      total: bookings.count ?? 0,
+      pending: pendingBookings.count ?? 0,
+    },
+    courseRegistrations: {
+      total: activeRegistrations.length,
+      pending: activeRegistrations.filter((row) => row.status === "pending").length,
+    },
   };
 }
 

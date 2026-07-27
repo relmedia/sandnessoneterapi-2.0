@@ -14,6 +14,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { APP_CONFIG } from "@/config/app-config";
+import type { SidebarCount } from "@/lib/bookings";
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
@@ -59,7 +60,7 @@ const _data = {
 export function AppSidebar({
   badges,
   ...props
-}: React.ComponentProps<typeof Sidebar> & { badges?: Record<string, number> }) {
+}: React.ComponentProps<typeof Sidebar> & { badges?: Record<string, SidebarCount> }) {
   const { sidebarVariant, sidebarCollapsible, isSynced } = usePreferencesStore(
     useShallow((s) => ({
       sidebarVariant: s.sidebarVariant,
