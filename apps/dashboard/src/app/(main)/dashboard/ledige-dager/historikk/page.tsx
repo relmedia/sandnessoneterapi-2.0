@@ -1,8 +1,3 @@
-import Link from "next/link";
-
-import { CalendarDays } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
 import { getPastAvailabilityDays } from "@/lib/bookings";
 
 import { AvailabilityDayTable } from "../_components/availability-day-table";
@@ -20,15 +15,7 @@ export default async function LedigeDagerHistorikkPage() {
             Dager som har vært åpne for timebestilling, men som nå har passert. De vises ikke på nettsiden.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
-            <Link href="/dashboard/ledige-dager">
-              <CalendarDays className="size-4" />
-              Kommende dager
-            </Link>
-          </Button>
-          {days.length > 0 && <DeletePastDaysButton count={days.length} />}
-        </div>
+        {days.length > 0 && <DeletePastDaysButton count={days.length} />}
       </div>
 
       <AvailabilityDayTable
