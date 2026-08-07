@@ -8,12 +8,15 @@ import { DayPicker, getDefaultClassNames } from "react-day-picker";
 import { nb } from "react-day-picker/locale";
 
 import { FloatingLabelField } from "@/components/floating-label-field";
+import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget";
 import { formatDateIso, formatDateNbLong } from "@/lib/booking";
 
 import "react-day-picker/style.css";
 import "./booking-calendar.css";
 
 type Step = "form" | "confirm" | "success" | "error";
+
+const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim());
 
 interface BookingPreview {
   service?: string;
@@ -162,6 +165,13 @@ export function CancelBookingForm() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [useLookup, setUseLookup] = useState(false);
 
+  // The lookup step and the confirm step each hit a protected endpoint, and a
+  // Turnstile token can only be redeemed once, so each step gets its own widget.
+  const [lookupCaptcha, setLookupCaptcha] = useState<string | null>(null);
+  const [cancelCaptcha, setCancelCaptcha] = useState<string | null>(null);
+  const lookupCaptchaRef = useRef<TurnstileWidgetHandle>(null);
+  const cancelCaptchaRef = useRef<TurnstileWidgetHandle>(null);
+
   useEffect(() => {
     if (!initialToken) return;
     void loadBookingByToken(initialToken);
@@ -194,6 +204,12 @@ export function CancelBookingForm() {
 
   async function handleLookupSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (turnstileEnabled && !lookupCaptcha) {
+      setErrorMessage("Bekreft at du ikke er en robot.");
+      return;
+    }
+
     setSubmitting(true);
     setErrorMessage(null);
     setUseLookup(true);
@@ -202,7 +218,13 @@ export function CancelBookingForm() {
       const response = await fetch("/api/booking/lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, phone, date, website: "" }),
+        body: JSON.stringify({
+          email,
+          phone,
+          date,
+          website: "",
+          ...(lookupCaptcha ? { turnstileToken: lookupCaptcha } : {}),
+        }),
       });
 
       const data = (await response.json()) as { booking?: BookingPreview; error?: string };
@@ -211,9 +233,12 @@ export function CancelBookingForm() {
         throw new Error(data.error ?? "Fant ingen time.");
       }
 
+      setLookupCaptcha(null);
       setBooking(data.booking ?? null);
       setStep("confirm");
     } catch (error) {
+      setLookupCaptcha(null);
+      lookupCaptchaRef.current?.reset();
       setErrorMessage(error instanceof Error ? error.message : "Fant ingen time.");
     } finally {
       setSubmitting(false);
@@ -221,17 +246,25 @@ export function CancelBookingForm() {
   }
 
   async function handleCancel() {
+    if (turnstileEnabled && !cancelCaptcha) {
+      setErrorMessage("Bekreft at du ikke er en robot.");
+      return;
+    }
+
     setSubmitting(true);
     setErrorMessage(null);
 
     try {
-      const body =
+      const lookupBody =
         !useLookup && token.trim() ? { token: token.trim(), website: "" } : { email, phone, date, website: "" };
 
       const response = await fetch("/api/booking/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          ...lookupBody,
+          ...(cancelCaptcha ? { turnstileToken: cancelCaptcha } : {}),
+        }),
       });
 
       const data = (await response.json()) as { message?: string; error?: string; booking?: BookingPreview };
@@ -240,9 +273,12 @@ export function CancelBookingForm() {
         throw new Error(data.error ?? "Kunne ikke avbestille.");
       }
 
+      setCancelCaptcha(null);
       setBooking(data.booking ?? null);
       setStep("success");
     } catch (error) {
+      setCancelCaptcha(null);
+      cancelCaptchaRef.current?.reset();
       setErrorMessage(error instanceof Error ? error.message : "Kunne ikke avbestille.");
     } finally {
       setSubmitting(false);
@@ -301,14 +337,27 @@ export function CancelBookingForm() {
           ) : !booking.canCancel ? (
             <p className="text-body-sm">Timen kan ikke avbestilles online. Ring oss for hjelp.</p>
           ) : (
-            <button
-              type="button"
-              onClick={() => void handleCancel()}
-              disabled={submitting}
-              className="rounded-full bg-stone px-8 py-4 font-sans text-sm font-normal tracking-wide text-cream transition-colors hover:bg-sage-dark disabled:opacity-50"
-            >
-              {submitting ? "Avbestiller …" : "Avbestill timen"}
-            </button>
+            <>
+              {turnstileEnabled && (
+                <TurnstileWidget
+                  ref={cancelCaptchaRef}
+                  onToken={setCancelCaptcha}
+                  onExpire={() => setCancelCaptcha(null)}
+                  onError={() => {
+                    setCancelCaptcha(null);
+                    setErrorMessage("Sikkerhetskontrollen kunne ikke lastes. Prøv igjen.");
+                  }}
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => void handleCancel()}
+                disabled={submitting || (turnstileEnabled && !cancelCaptcha)}
+                className="rounded-full bg-stone px-8 py-4 font-sans text-sm font-normal tracking-wide text-cream transition-colors hover:bg-sage-dark disabled:opacity-50"
+              >
+                {submitting ? "Avbestiller …" : "Avbestill timen"}
+              </button>
+            </>
           )}
 
           {errorMessage && (
@@ -323,6 +372,7 @@ export function CancelBookingForm() {
               setStep("form");
               setBooking(null);
               setErrorMessage(null);
+              setCancelCaptcha(null);
             }}
             className="font-sans text-sm font-normal text-sage-dark underline underline-offset-2"
           >
@@ -400,9 +450,20 @@ export function CancelBookingForm() {
           />
           <DateField label="Dato for timen" required value={date} onChange={setDate} />
           <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
+          {turnstileEnabled && (
+            <TurnstileWidget
+              ref={lookupCaptchaRef}
+              onToken={setLookupCaptcha}
+              onExpire={() => setLookupCaptcha(null)}
+              onError={() => {
+                setLookupCaptcha(null);
+                setErrorMessage("Sikkerhetskontrollen kunne ikke lastes. Prøv igjen.");
+              }}
+            />
+          )}
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || (turnstileEnabled && !lookupCaptcha)}
             className="rounded-full border border-stone/30 px-6 py-3 font-sans text-sm font-normal text-stone transition-colors hover:border-sage hover:text-sage-dark disabled:opacity-50"
           >
             {submitting ? "Søker …" : "Finn time"}

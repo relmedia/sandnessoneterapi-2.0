@@ -7,6 +7,12 @@ import {
   findBookingByLookup,
   findBookingByToken,
 } from "@/lib/booking-store";
+import {
+  getRequestIp,
+  isTurnstileConfigured,
+  readTurnstileToken,
+  verifyTurnstileToken,
+} from "@/lib/turnstile";
 
 function bookingSummary(booking: BookingRecord) {
   return {
@@ -45,6 +51,18 @@ export async function POST(request: NextRequest) {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Ugyldig JSON." }, { status: 400 });
+  }
+
+  if (isTurnstileConfigured()) {
+    const turnstileToken = readTurnstileToken(body);
+    if (!turnstileToken) {
+      return NextResponse.json({ error: "Bekreft at du ikke er en robot." }, { status: 400 });
+    }
+
+    const isHuman = await verifyTurnstileToken(turnstileToken, getRequestIp(request));
+    if (!isHuman) {
+      return NextResponse.json({ error: "Sikkerhetskontrollen feilet. Prøv igjen." }, { status: 400 });
+    }
   }
 
   const supabase = createBookingClient();

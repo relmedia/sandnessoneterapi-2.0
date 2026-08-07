@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { DayPicker, getDefaultClassNames } from "react-day-picker";
 import { nb } from "react-day-picker/locale";
@@ -10,7 +10,7 @@ import {
   FloatingLabelSelect,
   FloatingLabelTextarea,
 } from "@/components/floating-label-field";
-import { TurnstileWidget } from "@/components/turnstile-widget";
+import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget";
 import {
   formatDateIso,
   getDefaultAvailabilityRange,
@@ -98,8 +98,15 @@ export function BookingForm({ services }: { readonly services: readonly BookingS
   const [service, setService] = useState<string>(services[0]?.value ?? "");
   const [message, setMessage] = useState("");
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
   const [availableDates, setAvailableDates] = useState<Set<string>>(new Set());
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
+
+  // The token is redeemed by siteverify on submit, so a retry needs a new one.
+  function resetTurnstile() {
+    setTurnstileToken(null);
+    turnstileRef.current?.reset();
+  }
 
   const defaultClassNames = getDefaultClassNames();
   const selectedDateIso = selectedDate ? formatDateIso(selectedDate) : null;
@@ -210,18 +217,17 @@ export function BookingForm({ services }: { readonly services: readonly BookingS
       const data = (await response.json()) as { message?: string; error?: string; cancelToken?: string };
 
       if (!response.ok) {
-        setTurnstileToken(null);
         throw new Error(data.error ?? "Noe gikk galt. Prøv igjen.");
       }
 
       if (!data.cancelToken) {
-        setTurnstileToken(null);
         throw new Error("Kunne ikke fullføre bestillingen.");
       }
 
       window.location.href = `/bestill-time/bekreftet?token=${encodeURIComponent(data.cancelToken)}`;
     } catch (error) {
       setFormState("error");
+      resetTurnstile();
       setErrorMessage(error instanceof Error ? error.message : "Noe gikk galt. Prøv igjen.");
     }
   }
@@ -392,6 +398,7 @@ export function BookingForm({ services }: { readonly services: readonly BookingS
             {turnstileEnabled && (
               <div className="mt-6">
                 <TurnstileWidget
+                  ref={turnstileRef}
                   onToken={setTurnstileToken}
                   onExpire={() => setTurnstileToken(null)}
                   onError={() => {

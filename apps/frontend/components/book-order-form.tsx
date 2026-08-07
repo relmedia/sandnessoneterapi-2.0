@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
-import { TurnstileWidget } from "@/components/turnstile-widget";
+import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget";
 import { FloatingLabelField, FloatingLabelTextarea } from "@/components/floating-label-field";
 import { DEFAULT_BOOK_SHIPPING_FEE_NOK } from "@/lib/book-order";
 
@@ -39,10 +39,17 @@ export function BookOrderForm({
   const [formState, setFormState] = useState<FormState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
 
   const totalPrice = bookPrice + shippingFee;
   const captchaRequired = turnstileEnabled;
   const captchaReady = !captchaRequired || Boolean(turnstileToken);
+
+  // The token is redeemed by siteverify on submit, so a retry needs a new one.
+  function resetTurnstile() {
+    setTurnstileToken(null);
+    turnstileRef.current?.reset();
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -82,14 +89,13 @@ export function BookOrderForm({
       };
 
       if (!response.ok || !data.orderId) {
-        setTurnstileToken(null);
         throw new Error(data.error ?? "Kunne ikke fullføre bestillingen.");
       }
 
       window.location.href = `/boker/bestilt?order=${encodeURIComponent(data.orderId)}`;
     } catch (error) {
       setFormState("error");
-      setTurnstileToken(null);
+      resetTurnstile();
       setErrorMessage(error instanceof Error ? error.message : "Kunne ikke fullføre bestillingen.");
     }
   }
@@ -189,6 +195,7 @@ export function BookOrderForm({
 
       {captchaRequired && (
         <TurnstileWidget
+          ref={turnstileRef}
           onToken={setTurnstileToken}
           onExpire={() => setTurnstileToken(null)}
           onError={() => {

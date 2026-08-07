@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 
 import { canCancelBookingStatus, validateCancelLookup } from "@/lib/booking";
 import { createBookingClient, findBookingByLookup } from "@/lib/booking-store";
+import {
+  getRequestIp,
+  isTurnstileConfigured,
+  readTurnstileToken,
+  verifyTurnstileToken,
+} from "@/lib/turnstile";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -15,6 +21,18 @@ export async function POST(request: Request) {
   const validation = validateCancelLookup(body);
   if (!validation.ok) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+
+  if (isTurnstileConfigured()) {
+    const token = readTurnstileToken(body);
+    if (!token) {
+      return NextResponse.json({ error: "Bekreft at du ikke er en robot." }, { status: 400 });
+    }
+
+    const isHuman = await verifyTurnstileToken(token, getRequestIp(request));
+    if (!isHuman) {
+      return NextResponse.json({ error: "Sikkerhetskontrollen feilet. Prøv igjen." }, { status: 400 });
+    }
   }
 
   const supabase = createBookingClient();

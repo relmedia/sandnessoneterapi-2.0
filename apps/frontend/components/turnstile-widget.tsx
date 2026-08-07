@@ -1,14 +1,22 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 
 const TURNSTILE_SCRIPT_ID = "cf-turnstile-script";
 const TURNSTILE_SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+
+// Lets Cloudflare attribute this integration in account-level analytics.
+const TURNSTILE_ACTION = "turnstile-spin-v2";
 
 type TurnstileWidgetProps = {
   onToken: (token: string) => void;
   onExpire?: () => void;
   onError?: () => void;
+};
+
+export type TurnstileWidgetHandle = {
+  /** Discards the redeemed token and issues a challenge for a fresh one. */
+  reset: () => void;
 };
 
 declare global {
@@ -22,9 +30,11 @@ declare global {
           "expired-callback"?: () => void;
           "error-callback"?: () => void;
           theme?: "light" | "dark" | "auto";
+          action?: string;
         },
       ) => string;
       remove: (widgetId: string) => void;
+      reset: (widgetId?: string) => void;
     };
   }
 }
@@ -53,13 +63,17 @@ function loadTurnstileScript(): Promise<void> {
     script.id = TURNSTILE_SCRIPT_ID;
     script.src = TURNSTILE_SCRIPT_SRC;
     script.async = true;
+    script.defer = true;
     script.onload = () => resolve();
     script.onerror = () => reject(new Error("Turnstile script failed to load."));
     document.head.appendChild(script);
   });
 }
 
-export function TurnstileWidget({ onToken, onExpire, onError }: TurnstileWidgetProps) {
+export const TurnstileWidget = forwardRef<TurnstileWidgetHandle, TurnstileWidgetProps>(function TurnstileWidget(
+  { onToken, onExpire, onError },
+  ref,
+) {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
@@ -79,6 +93,21 @@ export function TurnstileWidget({ onToken, onExpire, onError }: TurnstileWidgetP
     onErrorRef.current = onError;
   }, [onError]);
 
+  // Turnstile tokens are single-use: once siteverify redeems one, submitting it
+  // again is rejected as timeout-or-duplicate. Forms call this before letting
+  // the visitor retry so the next attempt carries a fresh token.
+  useImperativeHandle(
+    ref,
+    () => ({
+      reset: () => {
+        if (widgetIdRef.current && window.turnstile) {
+          window.turnstile.reset(widgetIdRef.current);
+        }
+      },
+    }),
+    [],
+  );
+
   useEffect(() => {
     if (!siteKey || !containerRef.current) return;
 
@@ -91,6 +120,7 @@ export function TurnstileWidget({ onToken, onExpire, onError }: TurnstileWidgetP
         widgetIdRef.current = window.turnstile.render(containerRef.current, {
           sitekey: siteKey,
           theme: "light",
+          action: TURNSTILE_ACTION,
           callback: (token) => onTokenRef.current(token),
           "expired-callback": () => onExpireRef.current?.(),
           "error-callback": () => onErrorRef.current?.(),
@@ -111,5 +141,13 @@ export function TurnstileWidget({ onToken, onExpire, onError }: TurnstileWidgetP
 
   if (!siteKey) return null;
 
-  return <div ref={containerRef} className="min-h-[65px]" aria-label="Sikkerhetskontroll" />;
-}
+  return (
+    <div
+      ref={containerRef}
+      className="cf-turnstile min-h-[65px]"
+      data-sitekey={siteKey}
+      data-action={TURNSTILE_ACTION}
+      aria-label="Sikkerhetskontroll"
+    />
+  );
+});

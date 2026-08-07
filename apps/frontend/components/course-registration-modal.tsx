@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -14,7 +15,7 @@ import {
 import { Check, MapPin, X } from "lucide-react";
 
 import { FloatingLabelField, FloatingLabelTextarea } from "@/components/floating-label-field";
-import { TurnstileWidget } from "@/components/turnstile-widget";
+import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget";
 import type { CourseSessionAvailability } from "@/lib/course-registration";
 
 const turnstileEnabled = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim());
@@ -59,6 +60,13 @@ function CourseRegistrationForm({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
+
+  // The token is redeemed by siteverify on submit, so a retry needs a new one.
+  function resetTurnstile() {
+    setTurnstileToken(null);
+    turnstileRef.current?.reset();
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -103,7 +111,7 @@ function CourseRegistrationForm({
 
       setSuccessMessage(data.message ?? "Påmeldingen er sendt.");
     } catch (error) {
-      setTurnstileToken(null);
+      resetTurnstile();
       setErrorMessage(error instanceof Error ? error.message : "Kunne ikke sende påmeldingen.");
     } finally {
       setSubmitting(false);
@@ -245,6 +253,7 @@ function CourseRegistrationForm({
       {turnstileEnabled && (
         <div className="mt-6">
           <TurnstileWidget
+            ref={turnstileRef}
             onToken={setTurnstileToken}
             onExpire={() => setTurnstileToken(null)}
             onError={() => {
